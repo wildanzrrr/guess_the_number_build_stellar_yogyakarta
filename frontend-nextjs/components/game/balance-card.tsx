@@ -2,12 +2,7 @@
 
 import * as React from "react";
 import { ArrowsClockwise, Wallet } from "@phosphor-icons/react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useXlmBalance } from "@/lib/use-xlm-balance";
@@ -75,9 +70,7 @@ export function BalanceCard({ refreshKey = 0 }: BalanceCardProps) {
               </span>
             </div>
             {error ? (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {error}
-              </p>
+              <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
             ) : isLoading ? (
               <p className="text-xs text-zinc-400">Fetching balance…</p>
             ) : null}

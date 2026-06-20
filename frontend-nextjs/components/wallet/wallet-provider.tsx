@@ -4,11 +4,10 @@ import * as React from "react";
 import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk";
 import { ensureKit, KitEventType, NETWORK_PASSPHRASE } from "@/lib/wallet-kit";
 
-export interface SignTransactionInput {
-  /** Base64 XDR of the transaction to sign. */
-  xdr: string;
-  /** Optional override of the address used to sign. Defaults to the active address. */
-  address?: string;
+/** Shape returned by `signTransaction`, matches the SDK's `SignTransaction`. */
+export interface SignTransactionResult {
+  signedTxXdr: string;
+  signerAddress?: string;
 }
 
 export interface WalletContextValue {
@@ -22,8 +21,15 @@ export interface WalletContextValue {
   connect: () => Promise<void>;
   /** Disconnect the active wallet and clear local address state. */
   disconnect: () => Promise<void>;
-  /** Request a signature for a transaction XDR. */
-  signTransaction: (input: SignTransactionInput) => Promise<string>;
+  /**
+   * Request a signature for a transaction XDR. Signature intentionally
+   * mirrors `@stellar/stellar-sdk`'s `SignTransaction` so it can be passed
+   * straight into `AssembledTransaction.signAndSend({ signTransaction })`.
+   */
+  signTransaction: (
+    xdr: string,
+    opts?: { address?: string },
+  ) => Promise<SignTransactionResult>;
 }
 
 const WalletContext = React.createContext<WalletContextValue | null>(null);
@@ -111,15 +117,21 @@ export function WalletProvider({ children }: WalletProviderProps) {
   }, []);
 
   const signTransaction = React.useCallback(
-    async ({ xdr, address: signWith }: SignTransactionInput) => {
+    async (
+      xdr: string,
+      opts?: { address?: string },
+    ): Promise<SignTransactionResult> => {
       await ensureKit();
-      const useAddress = signWith ?? address;
+      const useAddress = opts?.address ?? address;
       if (!useAddress) throw new Error("No active wallet address to sign with");
-      const { signedTxXdr } = await StellarWalletsKit.signTransaction(xdr, {
+      const result = await StellarWalletsKit.signTransaction(xdr, {
         networkPassphrase: NETWORK_PASSPHRASE,
         address: useAddress,
       });
-      return signedTxXdr;
+      return {
+        signedTxXdr: result.signedTxXdr,
+        signerAddress: useAddress,
+      };
     },
     [address],
   );

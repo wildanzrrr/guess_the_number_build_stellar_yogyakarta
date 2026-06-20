@@ -47,15 +47,18 @@ export function GuessGame() {
         } else {
           const correct = result.unwrap();
           if (correct) {
-            toast.success("Correct! +10 XLM 🎉", {
+            toast.success("Correct! You won 10 XLM 🎉", {
               description:
-                "The contract paid you 10 XLM and rolled a new number. Try again?",
-              icon: <Confetti className="size-4" weight="duotone" />,
+                "Paid out from the contract. A new secret number has been rolled — try again!",
+              icon: <Confetti className="size-5" weight="duotone" />,
+              duration: 6000,
             });
           } else {
             toast("Not this time", {
-              description: "That guess wasn't the secret. Try a different number.",
-              icon: <SmileyXEyes className="size-4" weight="duotone" />,
+              description:
+                "That wasn't the secret. Pick another number between 1 and 5.",
+              icon: <SmileyXEyes className="size-5" weight="duotone" />,
+              duration: 5000,
             });
           }
         }

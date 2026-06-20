@@ -1,8 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { rpc } from "guess-the-number-bindings";
-import { RPC_URL } from "@/lib/guess-client";
 import { useWallet } from "@/components/wallet/wallet-provider";
 
 export interface XlmBalanceState {
@@ -17,6 +15,7 @@ export interface XlmBalanceState {
 }
 
 const STROOPS_PER_XLM = 10_000_000;
+const HORIZON_URL = "https://horizon-testnet.stellar.org";
 
 export function useXlmBalance(refreshKey: number = 0): XlmBalanceState {
   const { address, isConnected } = useWallet();
@@ -42,28 +41,40 @@ export function useXlmBalance(refreshKey: number = 0): XlmBalanceState {
 
     (async () => {
       try {
-        const server = new rpc.Server(RPC_URL, { allowHttp: false });
-        const account = await server.getAccount(address);
+        // Soroban RPC doesn't expose native balances — query Horizon, which
+        // returns the full account envelope including balances[].
+        const url = `${HORIZON_URL}/accounts/${address}`;
+        const res = await fetch(url, {
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          throw new Error(`Horizon returned ${res.status}`);
+        }
+        const account = (await res.json()) as {
+          balances?: { asset_type: string; balance: string }[];
+        };
         if (cancelled) return;
 
-        const native = account.balances.find(
-          (b: { asset_type: string }) => b.asset_type === "native",
-        );
+        const native = account.balances?.find((b) => b.asset_type === "native");
         if (!native) {
           setBalance("0");
           setError(null);
-        } else {
-          const stroops = BigInt(
-            (native as { balance: string }).balance.replace(".", ""),
-          );
-          // Native balance from Horizon/RPC is always in stroops as a string
-          // like "1000000000". Convert to whole XLM with one decimal for UX.
-          const whole = stroops / BigInt(STROOPS_PER_XLM);
-          const frac =
-            (stroops % BigInt(STROOPS_PER_XLM)) / BigInt(STROOPS_PER_XLM / 10);
-          setBalance(`${whole}.${frac.toString().padStart(1, "0")}`);
-          setError(null);
+          return;
         }
+        // Horizon returns `"1000000000.0000000"` — 7 decimal places (stroops).
+        const fixed = native.balance.padEnd(
+          native.balance.indexOf(".") + 7 + 1,
+          "0",
+        );
+        const [wholePart, fracPart = ""] = fixed.split(".");
+        const frac7 = fracPart.padEnd(7, "0").slice(0, 7);
+        const stroops =
+          BigInt(wholePart) * BigInt(STROOPS_PER_XLM) + BigInt(frac7);
+        const whole = stroops / BigInt(STROOPS_PER_XLM);
+        const frac =
+          (stroops % BigInt(STROOPS_PER_XLM)) / BigInt(STROOPS_PER_XLM / 10);
+        setBalance(`${whole}.${frac.toString().padStart(1, "0")}`);
+        setError(null);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : String(err));

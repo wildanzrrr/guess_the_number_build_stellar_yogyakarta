@@ -4,6 +4,12 @@ A minimal Soroban smart contract that runs a "guess the number" game on Stellar.
 
 > Built with `soroban-sdk = 25` against Stellar Protocol 25 (Futurenet / Testnet / Public).
 
+## Deployed contract addresses
+
+[Testnet: CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU](https://lab.stellar.org/r/testnet/contract/CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU)
+
+[Lab Explorer: CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU](https://lab.stellar.org/smart-contracts/contract-explorer?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;&smartContracts$explorer$contractId=CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU;;)
+
 ---
 
 ## Game rules

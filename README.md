@@ -4,6 +4,12 @@ A minimal Soroban smart contract that runs a "guess the number" game on Stellar.
 
 > Built with `soroban-sdk = 25` against Stellar Protocol 25 (Futurenet / Testnet / Public).
 
+![Correct guessing the number](docs/screenshots/App2.png)
+
+## Deployed live site
+
+[https://fe-guess-the-number-build-stellar-y.vercel.app/](https://fe-guess-the-number-build-stellar-y.vercel.app/)
+
 ## Deployed contract addresses
 
 [Testnet: CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU](https://lab.stellar.org/r/testnet/contract/CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU)
@@ -23,24 +29,6 @@ A minimal Soroban smart contract that runs a "guess the number" game on Stellar.
 | Correct guess but contract balance < 10 XLM                 | Returns `Err(InsufficientRewardFunds)`. **No transfer, no reset.** The contract refuses to underpay. |
 
 The contract is **honest by construction**: winners always get the full advertised 10 XLM, or no transfer happens at all.
-
----
-
-## Project structure
-
-```text
-guess-the-number/
-├── Cargo.toml                            # workspace: soroban-sdk = "25"
-├── README.md                             # you are here
-└── contracts/
-    └── guess-the-number/
-        ├── Cargo.toml
-        └── src/
-            ├── lib.rs        # GuessTheNumber contract
-            ├── xlm.rs        # XLM Stellar Asset Contract helpers
-            ├── error.rs      # Error enum
-            └── test.rs       # Unit tests
-```
 
 ---
 
@@ -170,57 +158,86 @@ stellar contract bindings typescript \
 
 ---
 
-## Interact
+## Frontend (`frontend-nextjs/`)
 
-### Using the script
+A Next.js 16 / React 19 single-page app that talks to the deployed contract via auto-generated TypeScript bindings and [Stellar Wallets Kit](https://stellarwalletskit.dev/) for wallet connectivity.
 
-```bash
-CONTRACT_ID=CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU
+### What the UI does
 
-# Snapshot: admin + XLM balances
-./scripts/guess-the-number.sh status
+- **Wallet connect / disconnect** via the `ConnectWalletButton` (Freighter + the default kit module list — Albedo, Lobstr, xBull, Hana, Rabet, etc.).
+- **Live XLM balance card** that refetches on connect/disconnect and after every guess result (success or failure), with a manual refresh icon.
+- **Number pad (1–5)** — each button opens a Radix `Popover` to confirm before submitting the on-chain transaction.
+- **Result toast** — green for a correct guess ("Correct! You won 10 XLM 🎉"), neutral for a wrong guess, red for a contract error (`InvalidGuess`, `InsufficientRewardFunds`, `FailedToTransferReward`) — all styled with the shadcn neobrutalism theme.
+- **Auto-refetch** — the balance refresh key is bumped in `finally` after every `guess()` call, so the card always reflects the latest chain state.
 
-# Submit a guess (read-only by default; auto-broadcasts if correct)
-./scripts/guess-the-number.sh guess 3
+### Prerequisites
 
-# Guess as a different identity (must exist in `stellar keys ls`)
-./scripts/guess-the-number.sh guess 4 receiver1
+- Node.js ≥ 20 + pnpm (`brew install pnpm` or `corepack enable`)
+- A Stellar testnet wallet — install [Freighter](https://www.freighter.app/) and fund it via friendbot (`stellar keys fund <identity> --network testnet` after `stellar keys generate <identity>`)
 
-# Top up the contract by 50 XLM
-./scripts/guess-the-number.sh topup 50
-```
-
-### Using `stellar contract invoke` directly
+### Setup
 
 ```bash
-CONTRACT_ID=CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU
-
-# Read admin (read-only)
-stellar contract invoke \
-  --id "$CONTRACT_ID" --network testnet --source-account danzrrr -- admin
-
-# Read the contract's XLM balance
-stellar contract invoke \
-  --id CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
-  --network testnet --source-account danzrrr -- balance --id "$CONTRACT_ID"
-
-# Submit a guess (simulation only — pass --send=yes to broadcast)
-stellar contract invoke \
-  --id "$CONTRACT_ID" --network testnet --source-account danzrrr \
-  -- guess --user_number 3 --guesser danzrrr
+cd frontend-nextjs
+pnpm install --ignore-scripts    # `--ignore-scripts` avoids pnpm's build-script approval prompt
 ```
 
-A `true` return value means a 10 XLM reward was paid and a new secret was rolled. A `false` means wrong guess, no state change.
+The first install creates a symlink `node_modules/guess-the-number-bindings → contracts/guess-the-number` via the `file:` dependency in `package.json`.
 
----
+### Generate (or regenerate) the bindings
 
-## Known deployed contracts
+The bindings are already committed under `frontend-nextjs/contracts/guess-the-number/`. To regenerate after a contract change:
 
-| Network | Contract ID                                                | Explorer                                                                                                               |
-| ------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Testnet | `CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU` | [lab.stellar.org](https://lab.stellar.org/r/testnet/contract/CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU) |
+```bash
+# From the project root (not frontend-nextjs/):
+stellar contract bindings typescript \
+  --wasm target/wasm32v1-none/release/guess_the_number.wasm \
+  --output-dir frontend-nextjs/contracts/guess-the-number \
+  --overwrite
 
-Admin: `GAQG4QHJTX4NHPEKSU6UE4NABDUV673HL6QCRSAJRYFWTAAPVKJU2QIH` (`danzrrr` identity).
+# Compile them to JS:
+cd frontend-nextjs/contracts/guess-the-number
+npm install
+npm run build
+```
+
+### Configure the deployed contract
+
+The singleton client is hardcoded to the testnet deployment in [`frontend-nextjs/lib/guess-client.ts`](frontend-nextjs/lib/guess-client.ts):
+
+```ts
+export const GUESS_CONTRACT_ID =
+  "CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU";
+export const RPC_URL = "https://soroban-testnet.stellar.org";
+```
+
+To point at a different deployment (localnet, a fresh testnet deploy, etc.) edit that file or refactor it to read from `NEXT_PUBLIC_*` env vars.
+
+### Run
+
+```bash
+cd frontend-nextjs
+pnpm dev                          # http://localhost:3000
+```
+
+### Build
+
+```bash
+cd frontend-nextjs
+npx next build                    # type-checks + bundles; pnpm build pre-fails on ignored build scripts
+```
+
+### Frontend ↔ contract flow
+
+```text
+User clicks "3"
+  → Popover opens, user clicks "Confirm"
+  → guessClient.guess({ user_number: 3n, guesser: address }, { publicKey: address })
+  → tx.signAndSend({ signTransaction })         ← wallet signs via Stellar Wallets Kit
+  → result.isErr() / result.unwrap() == true|false
+  → toast + bump balance refresh key
+  → BalanceCard refetches from Horizon
+```
 
 ---
 

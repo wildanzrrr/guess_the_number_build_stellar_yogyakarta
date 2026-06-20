@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { WalletProvider } from "@/components/wallet/wallet-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -32,6 +33,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // The Stellar Wallets Kit injects --swk-* CSS variables into
+      // document.documentElement when its reactive store updates after
+      // init. We can't prevent that, so suppress the unavoidable mismatch
+      // between server-rendered and client-enhanced <html> attributes.
+      suppressHydrationWarning
       className={cn(
         "h-full",
         "antialiased",
@@ -43,6 +49,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <WalletProvider>{children}</WalletProvider>
+        <Toaster />
       </body>
     </html>
   );

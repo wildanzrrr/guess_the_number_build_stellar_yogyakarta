@@ -37,33 +37,43 @@ export function WalletProvider({ children }: WalletProviderProps) {
   const [isReady, setIsReady] = React.useState(false);
 
   // Init kit on mount, then attempt to restore prior session.
+  //
+  // We defer init with `requestAnimationFrame` so that the kit's reactive
+  // store doesn't synchronously mutate <html> during React's hydration
+  // commit phase. (It adds `--swk-*` CSS variables to
+  // `document.documentElement.style`, which would otherwise produce a
+  // hydration mismatch warning.)
   React.useEffect(() => {
     let cancelled = false;
+    let rafId: number | null = null;
 
-    (async () => {
-      try {
-        await ensureKit();
-        if (cancelled) return;
-
-        // If a wallet is already connected (kit persists across reloads),
-        // pull its address without opening the auth modal.
+    rafId = requestAnimationFrame(() => {
+      (async () => {
         try {
-          const { address: existing } = await StellarWalletsKit.getAddress();
-          if (!cancelled && existing) setAddress(existing);
-        } catch {
-          // No active session — that's fine.
-        }
+          await ensureKit();
+          if (cancelled) return;
 
-        if (!cancelled) setIsReady(true);
-      } catch (err) {
-        // Surface init failures so the UI can show them.
-        console.error("Failed to initialise StellarWalletsKit:", err);
-        if (!cancelled) setIsReady(true);
-      }
-    })();
+          // If a wallet is already connected (kit persists across reloads),
+          // pull its address without opening the auth modal.
+          try {
+            const { address: existing } = await StellarWalletsKit.getAddress();
+            if (!cancelled && existing) setAddress(existing);
+          } catch {
+            // No active session — that's fine.
+          }
+
+          if (!cancelled) setIsReady(true);
+        } catch (err) {
+          // Surface init failures so the UI can show them.
+          console.error("Failed to initialise StellarWalletsKit:", err);
+          if (!cancelled) setIsReady(true);
+        }
+      })();
+    });
 
     return () => {
       cancelled = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, []);
 

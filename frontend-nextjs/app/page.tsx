@@ -2,6 +2,9 @@
 
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { useWallet } from "@/components/wallet/wallet-provider";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
   const { address, isConnected } = useWallet();
@@ -19,6 +22,20 @@ export default function Home() {
       </div>
 
       <ConnectWalletButton />
+
+      <Button
+        onClick={() =>
+          toast("Event has been created", {
+            description: "Sunday, December 03, 2023 at 9:00 AM",
+            action: {
+              label: "Undo",
+              onClick: () => console.log("Undo"),
+            },
+          })
+        }
+      >
+        Show Toast
+      </Button>
 
       <div className="text-sm text-zinc-500 dark:text-zinc-400 min-h-6">
         {isConnected && address ? (

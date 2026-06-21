@@ -3,16 +3,32 @@
 import { Client, Networks, rpc, Errors } from "guess-the-number-bindings";
 
 /**
- * Deployed guess-the-number contract on Stellar testnet.
- * Update here when redeploying.
+ * Network configuration is read from NEXT_PUBLIC_* env vars, which are
+ * populated by `scripts/deploy.sh` into `frontend-nextjs/.env.local`.
  *
- * v2 (bet-based): contract now charges a 1 XLM bet per guess and returns
- * a string result ("correct" / "incorrect") instead of a boolean.
+ * Required vars:
+ *   NEXT_PUBLIC_RPC_URL              — Soroban RPC endpoint
+ *   NEXT_PUBLIC_NETWORK_PASSPHRASE   — Stellar network passphrase
+ *   NEXT_PUBLIC_CONTRACT_ADDRESS     — Deployed contract address (C…)
  */
-export const GUESS_CONTRACT_ID =
-  "CB5HLXNF2MDPCUP7GQEWS2OM6D2S6COJ52GB3DBQ2HDRB5KFA55PI2D7";
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "";
+const NETWORK_PASSPHRASE =
+  process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? Networks.TESTNET;
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "";
 
-export const RPC_URL = "https://soroban-testnet.stellar.org";
+if (!RPC_URL) {
+  console.warn(
+    "[guess-client] NEXT_PUBLIC_RPC_URL is not set — copy .env to frontend-nextjs/.env.local",
+  );
+}
+if (!CONTRACT_ADDRESS) {
+  console.warn(
+    "[guess-client] NEXT_PUBLIC_CONTRACT_ADDRESS is not set — deploy the contract first",
+  );
+}
+
+export const GUESS_CONTRACT_ID = CONTRACT_ADDRESS;
+export { RPC_URL };
 
 /**
  * Singleton Client bound to the deployed guess-the-number contract.
@@ -22,8 +38,8 @@ export const RPC_URL = "https://soroban-testnet.stellar.org";
  * signed by the active wallet — see `useSubmitGuess` for that flow.
  */
 export const guessClient = new Client({
-  networkPassphrase: Networks.TESTNET,
-  contractId: GUESS_CONTRACT_ID,
+  networkPassphrase: NETWORK_PASSPHRASE,
+  contractId: CONTRACT_ADDRESS,
   rpcUrl: RPC_URL,
   allowHttp: false,
   publicKey: undefined,

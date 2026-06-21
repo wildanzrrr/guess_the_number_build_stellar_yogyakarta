@@ -4,3 +4,11 @@ target
 # Local settings
 .soroban
 .stellar
+
+# Environment files (secrets / network-specific config)
+.env
+.env.local
+.env.*.local
+
+# Keep the example template tracked
+!.env.example

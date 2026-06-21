@@ -18,6 +18,16 @@ fn setup_xlm<'a>(env: &'a Env, admin: &Address) -> (Address, StellarAssetClient<
     (sac.address(), client)
 }
 
+/// 0.1 XLM in stroops (the bet amount).
+fn bet_stroops() -> i128 {
+    xlm::to_stroops_tenths(1)
+}
+
+/// 0.5 XLM in stroops (the reward amount).
+fn reward_stroops() -> i128 {
+    xlm::to_stroops_tenths(5)
+}
+
 /// Register the contract with `(admin, xlm_sac_address)`.
 fn init_client<'a>(env: &'a Env, admin: &Address, xlm: &Address) -> GuessTheNumberClient<'a> {
     let contract_id = env.register(GuessTheNumber, (admin.clone(), xlm.clone()));
@@ -37,7 +47,7 @@ fn constructed_correctly() {
     // Admin was recorded.
     assert_eq!(client.admin(), Some(admin.clone()));
     // Contract was funded with the initial pot.
-    assert_eq!(sac.balance(&contract_id), xlm::to_stroops(100));
+    assert_eq!(sac.balance(&contract_id), xlm::to_stroops(5));
     // First number is in range.
     let stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
     assert!(
@@ -58,20 +68,20 @@ fn guess_correct_pays_and_resets() {
 
     let initial = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
     let alice = Address::generate(&env);
-    // Fund alice so she can pay the 1 XLM bet.
+    // Fund alice so she can pay the 0.1 XLM bet.
     sac.mint(&alice, &xlm::to_stroops(100));
     let alice_balance_before = sac.balance(&alice);
 
-    // Correct guess: pays 1 XLM bet, pays 10 XLM reward, resets the number.
-    // Net effect on alice: +9 XLM. Net effect on contract: -9 XLM.
+    // Correct guess: pays 0.1 XLM bet, pays 0.5 XLM reward, resets the number.
+    // Net effect on alice: +0.4 XLM. Net effect on contract: -0.4 XLM.
     assert_eq!(client.guess(&initial, &alice), Symbol::new(&env, "correct"));
     assert_eq!(
         sac.balance(&alice),
-        alice_balance_before + xlm::to_stroops(9)
+        alice_balance_before - bet_stroops() + reward_stroops()
     );
     assert_eq!(
         sac.balance(&contract_id),
-        xlm::to_stroops(100) - xlm::to_stroops(9)
+        xlm::to_stroops(5) - reward_stroops() + bet_stroops()
     );
 
     // The stored number must have rolled — should still be in range.
@@ -97,20 +107,17 @@ fn guess_wrong_does_not_reset() {
     assert_ne!(wrong, stored);
 
     let alice = Address::generate(&env);
-    // Fund alice so she can pay the 1 XLM bet.
+    // Fund alice so she can pay the 0.1 XLM bet.
     sac.mint(&alice, &xlm::to_stroops(100));
     let alice_balance_before = sac.balance(&alice);
     let contract_balance_before = sac.balance(&contract_id);
 
-    // Wrong guess: pays 1 XLM bet, no reward, number unchanged.
+    // Wrong guess: pays 0.1 XLM bet, no reward, number unchanged.
     assert_eq!(client.guess(&wrong, &alice), Symbol::new(&env, "incorrect"));
-    assert_eq!(
-        sac.balance(&alice),
-        alice_balance_before - xlm::to_stroops(1)
-    );
+    assert_eq!(sac.balance(&alice), alice_balance_before - bet_stroops());
     assert_eq!(
         sac.balance(&contract_id),
-        contract_balance_before + xlm::to_stroops(1)
+        contract_balance_before + bet_stroops()
     );
 
     // Number unchanged.
@@ -150,7 +157,7 @@ fn failed_to_transfer_bet_when_guesser_has_no_balance() {
 
     let stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
     let broke = Address::generate(&env);
-    // broke has zero XLM — the 1 XLM bet transfer must fail.
+    // broke has zero XLM — the 0.1 XLM bet transfer must fail.
     assert_eq!(sac.balance(&broke), 0);
     let contract_balance_before = sac.balance(&contract_id);
 
@@ -175,15 +182,16 @@ fn insufficient_funds_blocks_reward_and_reset() {
     let contract_id = env.register(GuessTheNumber, (admin.clone(), xlm_addr.clone()));
     let client = GuessTheNumberClient::new(&env, &contract_id);
 
-    // Drain the contract below the reward threshold.
-    let drain_to: i128 = xlm::to_stroops(5);
+    // Drain the contract below the reward threshold (but keep enough to
+    // accept the 0.1 XLM bet).
+    let drain_to: i128 = bet_stroops();
     let drained_by = sac.balance(&contract_id) - drain_to;
     sac.transfer(&contract_id, &admin, &drained_by);
     assert_eq!(sac.balance(&contract_id), drain_to);
 
     let stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
     let alice = Address::generate(&env);
-    // Fund alice so she can pay the 1 XLM bet.
+    // Fund alice so she can pay the 0.1 XLM bet.
     sac.mint(&alice, &xlm::to_stroops(100));
     let alice_balance_before = sac.balance(&alice);
     let contract_balance_before = sac.balance(&contract_id);

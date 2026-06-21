@@ -14,9 +14,12 @@ const THE_NUMBER: Symbol = symbol_short!("n");
 const ADMIN_KEY: Symbol = symbol_short!("ADMIN");
 const MIN: u64 = 1;
 const MAX: u64 = 5;
-const BET_XLM: u64 = 1;
-const REWARD_XLM: u64 = 10;
-const INITIAL_FUNDING_XLM: u64 = 100;
+// Bet: 0.1 XLM per guess (1 tenth of an XLM).
+const BET_XLM_TENTHS: u64 = 1;
+// Reward: 0.5 XLM on a correct guess (5 tenths of an XLM).
+const REWARD_XLM_TENTHS: u64 = 5;
+// Initial pot: 5 XLM funded by the admin at deploy time.
+const INITIAL_FUNDING_XLM: u64 = 5;
 
 /// Result symbols returned by `guess`. The frontend interprets these
 /// strings to decide which toast to show.
@@ -28,7 +31,7 @@ impl GuessTheNumber {
     /// Constructor.
     ///
     /// `admin` funds the contract with `INITIAL_FUNDING_XLM` XLM out of its
-    /// own balance (the deployer should friendbot the admin first).
+    /// own balance (the deployer should fund the admin first).
     /// `xlm` is the address of the XLM Stellar Asset Contract on the target
     /// network — the deployer supplies it explicitly so the contract stays
     /// network-agnostic.
@@ -44,21 +47,21 @@ impl GuessTheNumber {
         Self::roll_number(env);
     }
 
-    /// Submit a guess. The caller must first authorize a 1 XLM transfer
+    /// Submit a guess. The caller must first authorize a 0.1 XLM transfer
     /// to the contract as the cost of playing.
     ///
     /// Returns:
     /// - `Ok("correct")` if the guess matches — the contract pays the
-    ///   10 XLM reward to the guesser and rolls a new random number.
+    ///   0.5 XLM reward to the guesser and rolls a new random number.
     /// - `Ok("incorrect")` if the guess does not match — the bet stays
     ///   in the contract and the number is NOT rolled.
     ///
     /// Errors (all state changes are rolled back atomically by Soroban):
     /// - `Err(InvalidGuess)` if the guess is outside `1..=5`.
-    /// - `Err(FailedToTransferBet)` if the 1 XLM bet could not be pulled
+    /// - `Err(FailedToTransferBet)` if the 0.1 XLM bet could not be pulled
     ///   from the guesser.
     /// - `Err(InsufficientRewardFunds)` if the contract cannot pay the
-    ///   full 10 XLM reward on a correct guess.
+    ///   full 0.5 XLM reward on a correct guess.
     /// - `Err(FailedToTransferReward)` if the reward transfer itself
     ///   fails.
     pub fn guess(env: &Env, user_number: u64, guesser: Address) -> Result<Symbol, Error> {
@@ -71,16 +74,16 @@ impl GuessTheNumber {
         let contract_address = env.current_contract_address();
         let xlm = xlm::token_client(env);
 
-        // Pull the 1 XLM bet from the guesser first. If this fails the
+        // Pull the 0.1 XLM bet from the guesser first. If this fails the
         // contract state is unchanged.
-        let bet = xlm::to_stroops(BET_XLM);
+        let bet = xlm::to_stroops_tenths(BET_XLM_TENTHS);
         if xlm.try_transfer(&guesser, &contract_address, &bet).is_err() {
             return Err(Error::FailedToTransferBet);
         }
 
         if user_number == Self::number(env) {
-            // Correct guess — pay the 10 XLM reward and roll a new number.
-            let reward = xlm::to_stroops(REWARD_XLM);
+            // Correct guess — pay the 0.5 XLM reward and roll a new number.
+            let reward = xlm::to_stroops_tenths(REWARD_XLM_TENTHS);
             let balance = xlm.balance(&contract_address);
             if balance < reward {
                 return Err(Error::InsufficientRewardFunds);

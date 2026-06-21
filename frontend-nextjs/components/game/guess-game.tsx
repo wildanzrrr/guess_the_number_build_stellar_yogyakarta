@@ -36,34 +36,53 @@ export function GuessGame() {
           { user_number: BigInt(n), guesser: address },
           { publicKey: address },
         );
+
+        // The simulation result is available before signing.
+        // When the guess is wrong the contract returns Ok(false) without
+        // changing any state, so the SDK marks it as a "read call" and
+        // signAndSend would throw NoSignatureNeeded.  We read the
+        // simulation result first to handle that case gracefully.
+        const simResult = tx.result;
+
+        if (simResult.isErr()) {
+          const err = simResult.unwrapErr();
+          toast.error("Guess failed", {
+            description: describeContractError(err as unknown as number),
+          });
+          return;
+        }
+
+        const correct = simResult.unwrap();
+
+        if (!correct) {
+          // Wrong guess — no state change, no need to sign & send.
+          toast("Not this time", {
+            description:
+              "That wasn't the secret. Pick another number between 1 and 5.",
+            icon: <SmileyXEyes className="size-5" weight="duotone" />,
+            duration: 5000,
+          });
+          return;
+        }
+
+        // Correct guess — the transaction changes state (XLM transfer +
+        // new random roll), so we need to sign and send it on-chain.
         const { result } = await tx.signAndSend({ signTransaction });
 
         if (result.isErr()) {
-          // Stellar contract error (decode from the on-chain code).
           const err = result.unwrapErr();
           toast.error("Guess failed", {
             description: describeContractError(err as unknown as number),
           });
         } else {
-          const correct = result.unwrap();
-          if (correct) {
-            toast.success("Correct! You won 10 XLM 🎉", {
-              description:
-                "Paid out from the contract. A new secret number has been rolled — try again!",
-              icon: <Confetti className="size-5" weight="duotone" />,
-              duration: 6000,
-            });
-          } else {
-            toast("Not this time", {
-              description:
-                "That wasn't the secret. Pick another number between 1 and 5.",
-              icon: <SmileyXEyes className="size-5" weight="duotone" />,
-              duration: 5000,
-            });
-          }
+          toast.success("Correct! You won 10 XLM 🎉", {
+            description:
+              "Paid out from the contract. A new secret number has been rolled — try again!",
+            icon: <Confetti className="size-5" weight="duotone" />,
+            duration: 6000,
+          });
         }
       } catch (err) {
-        // Anything thrown before result (wallet rejection, network, etc.)
         toast.error("Transaction failed", {
           description: err instanceof Error ? err.message : String(err),
         });

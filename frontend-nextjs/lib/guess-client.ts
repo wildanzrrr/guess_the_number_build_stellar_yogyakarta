@@ -5,9 +5,12 @@ import { Client, Networks, rpc, Errors } from "guess-the-number-bindings";
 /**
  * Deployed guess-the-number contract on Stellar testnet.
  * Update here when redeploying.
+ *
+ * v2 (bet-based): contract now charges a 1 XLM bet per guess and returns
+ * a string result ("correct" / "incorrect") instead of a boolean.
  */
 export const GUESS_CONTRACT_ID =
-  "CAX7C56YHSQXFUYUVKR3A5GB7XHLX3B4F4LATAQAFI25ZWI7YNMURLUU";
+  "CB5HLXNF2MDPCUP7GQEWS2OM6D2S6COJ52GB3DBQ2HDRB5KFA55PI2D7";
 
 export const RPC_URL = "https://soroban-testnet.stellar.org";
 

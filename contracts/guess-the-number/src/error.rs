@@ -8,4 +8,6 @@ pub enum Error {
     InsufficientRewardFunds = 2,
     /// The guess must be a whole number between 1 and 5 (inclusive).
     InvalidGuess = 3,
+    /// The contract failed to pull the 1 XLM bet from the guesser.
+    FailedToTransferBet = 4,
 }

@@ -38,10 +38,11 @@ export function GuessGame() {
         );
 
         // The simulation result is available before signing.
-        // When the guess is wrong the contract returns Ok(false) without
-        // changing any state, so the SDK marks it as a "read call" and
-        // signAndSend would throw NoSignatureNeeded.  We read the
-        // simulation result first to handle that case gracefully.
+        // The contract returns a string: "correct" or "incorrect".
+        // On an incorrect guess the contract keeps the 1 XLM bet and
+        // does NOT change the stored number, so the SDK marks it as a
+        // "read call" and signAndSend would throw NoSignatureNeeded.
+        // We read the simulation result first to handle that case.
         const simResult = tx.result;
 
         if (simResult.isErr()) {
@@ -52,21 +53,31 @@ export function GuessGame() {
           return;
         }
 
-        const correct = simResult.unwrap();
+        const outcome = simResult.unwrap();
 
-        if (!correct) {
-          // Wrong guess — no state change, no need to sign & send.
+        if (outcome === "incorrect") {
+          // Wrong guess — bet stays with the contract, no state change,
+          // no need to sign & send.
           toast("Not this time", {
             description:
-              "That wasn't the secret. Pick another number between 1 and 5.",
+              "That wasn't the secret. Your 1 XLM bet stays with the contract — try again!",
             icon: <SmileyXEyes className="size-5" weight="duotone" />,
             duration: 5000,
           });
           return;
         }
 
-        // Correct guess — the transaction changes state (XLM transfer +
-        // new random roll), so we need to sign and send it on-chain.
+        if (outcome !== "correct") {
+          // Defensive: unknown string from the contract.
+          toast.error("Unexpected result", {
+            description: `Contract returned: ${outcome}`,
+          });
+          return;
+        }
+
+        // Correct guess — the transaction changes state (1 XLM bet in,
+        // 10 XLM reward out, new random roll), so we need to sign and
+        // send it on-chain.
         const { result } = await tx.signAndSend({ signTransaction });
 
         if (result.isErr()) {
@@ -77,12 +88,13 @@ export function GuessGame() {
         } else {
           toast.success("Correct! You won 10 XLM 🎉", {
             description:
-              "Paid out from the contract. A new secret number has been rolled — try again!",
+              "Net +9 XLM (1 XLM bet returned as part of the 10 XLM reward). A new secret number has been rolled — try again!",
             icon: <Confetti className="size-5" weight="duotone" />,
             duration: 6000,
           });
         }
       } catch (err) {
+        console.error("Guess transaction failed", err);
         toast.error("Transaction failed", {
           description: err instanceof Error ? err.message : String(err),
         });

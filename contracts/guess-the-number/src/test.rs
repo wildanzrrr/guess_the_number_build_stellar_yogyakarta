@@ -6,7 +6,7 @@ use super::*;
 use soroban_sdk::{
     testutils::{Address as _, StellarAssetContract},
     token::StellarAssetClient,
-    Address, Env,
+    Address, Env, Symbol,
 };
 
 /// Register an XLM Stellar Asset Contract for tests, mint 10,000 XLM to
@@ -58,17 +58,20 @@ fn guess_correct_pays_and_resets() {
 
     let initial = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
     let alice = Address::generate(&env);
+    // Fund alice so she can pay the 1 XLM bet.
+    sac.mint(&alice, &xlm::to_stroops(100));
     let alice_balance_before = sac.balance(&alice);
 
-    // Correct guess pays 10 XLM and resets the number.
-    assert!(client.guess(&initial, &alice));
+    // Correct guess: pays 1 XLM bet, pays 10 XLM reward, resets the number.
+    // Net effect on alice: +9 XLM. Net effect on contract: -9 XLM.
+    assert_eq!(client.guess(&initial, &alice), Symbol::new(&env, "correct"));
     assert_eq!(
         sac.balance(&alice),
-        alice_balance_before + xlm::to_stroops(10)
+        alice_balance_before + xlm::to_stroops(9)
     );
     assert_eq!(
         sac.balance(&contract_id),
-        xlm::to_stroops(100) - xlm::to_stroops(10)
+        xlm::to_stroops(100) - xlm::to_stroops(9)
     );
 
     // The stored number must have rolled — should still be in range.
@@ -94,12 +97,21 @@ fn guess_wrong_does_not_reset() {
     assert_ne!(wrong, stored);
 
     let alice = Address::generate(&env);
+    // Fund alice so she can pay the 1 XLM bet.
+    sac.mint(&alice, &xlm::to_stroops(100));
     let alice_balance_before = sac.balance(&alice);
     let contract_balance_before = sac.balance(&contract_id);
 
-    assert!(!client.guess(&wrong, &alice));
-    assert_eq!(sac.balance(&alice), alice_balance_before);
-    assert_eq!(sac.balance(&contract_id), contract_balance_before);
+    // Wrong guess: pays 1 XLM bet, no reward, number unchanged.
+    assert_eq!(client.guess(&wrong, &alice), Symbol::new(&env, "incorrect"));
+    assert_eq!(
+        sac.balance(&alice),
+        alice_balance_before - xlm::to_stroops(1)
+    );
+    assert_eq!(
+        sac.balance(&contract_id),
+        contract_balance_before + xlm::to_stroops(1)
+    );
 
     // Number unchanged.
     let still_stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
@@ -127,6 +139,33 @@ fn invalid_guess_out_of_range() {
 }
 
 #[test]
+fn failed_to_transfer_bet_when_guesser_has_no_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (xlm_addr, sac) = setup_xlm(&env, &admin);
+    let contract_id = env.register(GuessTheNumber, (admin.clone(), xlm_addr.clone()));
+    let client = GuessTheNumberClient::new(&env, &contract_id);
+
+    let stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
+    let broke = Address::generate(&env);
+    // broke has zero XLM — the 1 XLM bet transfer must fail.
+    assert_eq!(sac.balance(&broke), 0);
+    let contract_balance_before = sac.balance(&contract_id);
+
+    assert_eq!(
+        client.try_guess(&stored, &broke).unwrap_err(),
+        Ok(Error::FailedToTransferBet)
+    );
+    // Contract balance unchanged — no bet was pulled.
+    assert_eq!(sac.balance(&contract_id), contract_balance_before);
+    // Number unchanged.
+    let still_stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
+    assert_eq!(stored, still_stored);
+}
+
+#[test]
 fn insufficient_funds_blocks_reward_and_reset() {
     let env = Env::default();
     env.mock_all_auths();
@@ -144,14 +183,20 @@ fn insufficient_funds_blocks_reward_and_reset() {
 
     let stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
     let alice = Address::generate(&env);
+    // Fund alice so she can pay the 1 XLM bet.
+    sac.mint(&alice, &xlm::to_stroops(100));
     let alice_balance_before = sac.balance(&alice);
+    let contract_balance_before = sac.balance(&contract_id);
 
     assert_eq!(
         client.try_guess(&stored, &alice).unwrap_err(),
         Ok(Error::InsufficientRewardFunds)
     );
-    // No transfer happened.
+    // Soroban rolls back ALL state changes when a contract returns an
+    // error, so the bet transfer is reverted too — alice keeps her XLM
+    // and the contract balance is unchanged.
     assert_eq!(sac.balance(&alice), alice_balance_before);
+    assert_eq!(sac.balance(&contract_id), contract_balance_before);
     // Number did NOT reset.
     let still_stored = env.as_contract(&contract_id, || GuessTheNumber::number(&env));
     assert_eq!(stored, still_stored);

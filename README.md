@@ -251,15 +251,15 @@ npx next build                    # type-checks + bundles; pnpm build pre-fails 
 User clicks "3"
   → Popover opens, user clicks "Confirm"
   → guessClient.guess({ user_number: 3n, guesser: address }, { publicKey: address })
-  → tx.result (simulation) is read first:
-      - Err(...) → toast the decoded contract error
-      - Ok("incorrect") → toast "Not this time" (no sign needed — read-only call)
-      - Ok("correct")   → fall through to signAndSend
-  → tx.signAndSend({ signTransaction })         ← wallet signs the 1 XLM bet + 10 XLM reward
-  → result.isErr() / result.unwrap() == "correct"
-  → toast + bump balance refresh key
+  → tx.signAndSend({ signTransaction })         ← wallet signs the 1 XLM bet (and 10 XLM reward on a win)
+  → result.isErr() → toast the decoded contract error
+  → result.unwrap() === "correct"   → green toast "Correct! You won 10 XLM 🎉"
+  → result.unwrap() === "incorrect" → neutral toast "Not this time"
+  → bump balance refresh key
   → BalanceCard refetches from Horizon
 ```
+
+The contract always has a write footprint (the 1 XLM bet transfer) and an auth entry (`guesser.require_auth()`), so `signAndSend` works for both correct and incorrect guesses — no separate simulation step is needed.
 
 ---
 

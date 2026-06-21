@@ -36,54 +36,25 @@ export function GuessGame() {
           { user_number: BigInt(n), guesser: address },
           { publicKey: address },
         );
+        const { result } = await tx.signAndSend({ signTransaction });
 
-        // The simulation result is available before signing.
-        // The contract returns a string: "correct" or "incorrect".
-        // On an incorrect guess the contract keeps the 1 XLM bet and
-        // does NOT change the stored number, so the SDK marks it as a
-        // "read call" and signAndSend would throw NoSignatureNeeded.
-        // We read the simulation result first to handle that case.
-        const simResult = tx.result;
-
-        if (simResult.isErr()) {
-          const err = simResult.unwrapErr();
+        if (result.isErr()) {
+          // Stellar contract error (decode from the on-chain code).
+          const err = result.unwrapErr();
           toast.error("Guess failed", {
             description: describeContractError(err as unknown as number),
           });
           return;
         }
 
-        const outcome = simResult.unwrap();
+        const outcome = result.unwrap();
 
         if (outcome === "incorrect") {
-          // Wrong guess — bet stays with the contract, no state change,
-          // no need to sign & send.
           toast("Not this time", {
             description:
               "That wasn't the secret. Your 1 XLM bet stays with the contract — try again!",
             icon: <SmileyXEyes className="size-5" weight="duotone" />,
             duration: 5000,
-          });
-          return;
-        }
-
-        if (outcome !== "correct") {
-          // Defensive: unknown string from the contract.
-          toast.error("Unexpected result", {
-            description: `Contract returned: ${outcome}`,
-          });
-          return;
-        }
-
-        // Correct guess — the transaction changes state (1 XLM bet in,
-        // 10 XLM reward out, new random roll), so we need to sign and
-        // send it on-chain.
-        const { result } = await tx.signAndSend({ signTransaction });
-
-        if (result.isErr()) {
-          const err = result.unwrapErr();
-          toast.error("Guess failed", {
-            description: describeContractError(err as unknown as number),
           });
         } else {
           toast.success("Correct! You won 10 XLM 🎉", {
@@ -94,7 +65,6 @@ export function GuessGame() {
           });
         }
       } catch (err) {
-        console.error("Guess transaction failed", err);
         toast.error("Transaction failed", {
           description: err instanceof Error ? err.message : String(err),
         });
